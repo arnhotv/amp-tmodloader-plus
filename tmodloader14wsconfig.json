@@ -58,13 +58,13 @@
         "Category": "Terraria:stadia_controller",
         "Subcategory": "Generation:globe:1",
         "Keywords": "seed,new,world",
-        "Description": "Which world seed to use when generating a new world",
+        "Description": "Seed used when generating a new world. **Leave empty for a random world**, which is what you want in almost every case. A fixed seed reproduces the exact same world every time - useful to share a specific layout, but if a mod crashes during generation on that layout, it will crash identically on every attempt.",
         "FieldName": "Seed",
         "ParamFieldName": "seed",
-        "placeholder": "PoweredByAMP",
+        "placeholder": "random",
         "InputType": "text",
-        "IncludeInCommandLine": true,
-        "DefaultValue": "PoweredByAMP"
+        "IncludeInCommandLine": false,
+        "DefaultValue": ""
     },
     {
         "DisplayName": "World Size",
@@ -156,6 +156,18 @@
         "IncludeInCommandLine": false,
         "DefaultValue": "public",
         "placeholder": "1.4.4-preview"
+    },
+    {
+        "DisplayName": "tModLoader Version (GitHub)",
+        "Category": "Updates",
+        "Subcategory": "Server Updates:build:-1",
+        "Keywords": "version,tag,release,github,pin,downgrade",
+        "Description": "Pins a specific tModLoader release when Update Source is GitHub. Use the exact tag from the [releases page](https://github.com/tModLoader/tModLoader/releases), e.g. `v2024.10.3.0`. Leave empty for the latest release. Useful when a mod pack targets an older build. Press Update after changing this.",
+        "FieldName": "TMLVersion",
+        "InputType": "text",
+        "IncludeInCommandLine": false,
+        "DefaultValue": "",
+        "placeholder": "v2024.10.3.0"
     },
     {
         "DisplayName": "Dotnet Release Stream",

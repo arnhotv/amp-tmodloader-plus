@@ -27,6 +27,7 @@
         "UpdateSource": "GithubRelease",
         "UpdateSourceData": "tModLoader.zip",
         "UpdateSourceArgs": "tModLoader/tModLoader",
+        "UpdateSourceVersion": "{{TMLVersion}}",
         "UpdateSourceTarget": "serverfiles",
         "UnzipUpdateSource": true,
         "OverwriteExistingFiles": true,

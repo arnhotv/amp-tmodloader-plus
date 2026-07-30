@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 # tModLoader 1.4+ Workshop mod sync for the AMP Generic module
 #
-# Called from tmodloader14updates.json as:
+# Called from tmodloader14wsupdates.json as:
 #   /bin/bash <script> <BaseDir> <WorkshopMods> <ModPath> <AutoEnableMods>
 #
 # 1. Extracts Workshop item IDs from the "Workshop Mods" setting
@@ -10,10 +10,12 @@
 # 2. Expands collections via the public Steam Web API (no API key needed)
 # 3. Writes <ModPath>/install.txt (the format used by tModLoader's own
 #    manage-tModLoaderServer.sh, so the file stays portable)
-# 4. Downloads/updates every item with SteamCMD (anonymous login)
-# 5. Normalises anything AMP's built-in Workshop store dropped in flat, so
+# 4. Downloads with SteamCMD, verifying what actually landed and retrying
+#    the items it silently skipped
+# 5. Removes mods that are no longer in the list
+# 6. Normalises anything AMP's built-in Workshop store dropped in flat, so
 #    the layout always matches <workshop>/content/1281930/<id>/<ver>/*.tmod
-# 6. Optionally regenerates <ModPath>/enabled.json from every .tmod found
+# 7. Optionally regenerates <ModPath>/enabled.json from every .tmod found
 #
 # The script is idempotent: running it again only downloads what changed.
 # ---------------------------------------------------------------------------
@@ -38,6 +40,15 @@ CONTENTDIR="$WORKSHOPDIR/content/$APPID"
 MODSDIR="$BASEDIR/$MODPATH"
 
 mkdir -p "$MODSDIR" "$CONTENTDIR"
+
+# Does a Workshop item have at least one .tmod on disk?
+function item_present {
+	local id="$1"
+	compgen -G "$CONTENTDIR/$id/*.tmod" >/dev/null 2>&1 && return 0
+	compgen -G "$CONTENTDIR/$id/*/*.tmod" >/dev/null 2>&1 && return 0
+	compgen -G "$CONTENTDIR/$id/*/*/*.tmod" >/dev/null 2>&1 && return 0
+	return 1
+}
 
 # --- 1. Collect IDs -------------------------------------------------------
 # Any 6+ digit number in the setting is treated as a published file ID, which
@@ -83,7 +94,7 @@ for id in "${IDS[@]:-}"; do
 	[[ -n "$id" ]] && echo "$id" >>"$MODSDIR/install.txt"
 done
 
-# --- 4. SteamCMD download -------------------------------------------------
+# --- 4. SteamCMD download, with verification and retries ------------------
 if [[ ${#IDS[@]} -gt 0 ]]; then
 	STEAMCMD=""
 	for candidate in \
@@ -112,17 +123,72 @@ if [[ ${#IDS[@]} -gt 0 ]]; then
 	fi
 
 	if [[ -n "$STEAMCMD" ]]; then
-		CMD=("$STEAMCMD" +force_install_dir "$BASEDIR" +login anonymous)
-		for id in "${IDS[@]}"; do
-			CMD+=(+workshop_download_item "$APPID" "$id")
+		# SteamCMD silently drops items on large collections when logged in
+		# anonymously, and still exits 0. An incomplete mod set is worse than an
+		# obvious failure: the server starts, then crashes much later during
+		# world generation with an error that points at the mods rather than at
+		# the download. So trust the filesystem, not the exit code.
+		MAX_ATTEMPTS=5
+		attempt=1
+		missing=("${IDS[@]}")
+
+		while [[ ${#missing[@]} -gt 0 && $attempt -le $MAX_ATTEMPTS ]]; do
+			if [[ $attempt -eq 1 ]]; then
+				echo "[mod-sync] Downloading ${#IDS[@]} mod(s) with SteamCMD"
+			else
+				echo "[mod-sync] Attempt $attempt: ${#missing[@]} mod(s) still missing, retrying"
+			fi
+
+			CMD=("$STEAMCMD" +force_install_dir "$BASEDIR" +login anonymous)
+			for id in "${missing[@]}"; do
+				CMD+=(+workshop_download_item "$APPID" "$id")
+			done
+			CMD+=(+quit)
+			"${CMD[@]}" || echo "[mod-sync] SteamCMD exited non-zero, checking what landed anyway"
+
+			still_missing=()
+			for id in "${missing[@]}"; do
+				item_present "$id" || still_missing+=("$id")
+			done
+			missing=("${still_missing[@]}")
+			attempt=$((attempt + 1))
 		done
-		CMD+=(+quit)
-		echo "[mod-sync] Downloading ${#IDS[@]} mod(s) with SteamCMD"
-		"${CMD[@]}" || echo "[mod-sync] WARNING: SteamCMD returned a non-zero exit code"
+
+		if [[ ${#missing[@]} -gt 0 ]]; then
+			echo "[mod-sync] ============================================================"
+			echo "[mod-sync] WARNING: ${#missing[@]} mod(s) could not be downloaded after"
+			echo "[mod-sync] $MAX_ATTEMPTS attempts: ${missing[*]}"
+			echo "[mod-sync] The server will run with an INCOMPLETE mod set. For mod packs"
+			echo "[mod-sync] this usually surfaces later as a world generation crash."
+			echo "[mod-sync] Run Update again to retry the missing items."
+			echo "[mod-sync] ============================================================"
+		else
+			echo "[mod-sync] All ${#IDS[@]} mod(s) present on disk"
+		fi
 	fi
 fi
 
-# --- 5. Normalise the AMP mod-store layout --------------------------------
+# --- 5. Prune mods that are no longer in the list --------------------------
+# Without this, mods installed during earlier attempts stay on disk and get
+# re-enabled by the auto-enable step, silently turning the server into a
+# superset of what was asked for - fatal for finely balanced mod packs. Only
+# runs when a list is configured, so an empty field never wipes anything.
+if [[ ${#IDS[@]} -gt 0 ]]; then
+	declare -A WANTED=()
+	for id in "${IDS[@]}"; do WANTED[$id]=1; done
+
+	for iddir in "$CONTENTDIR"/*; do
+		[[ -d "$iddir" ]] || continue
+		id="$(basename "$iddir")"
+		[[ "$id" =~ ^[0-9]+$ ]] || continue
+		if [[ -z "${WANTED[$id]:-}" ]]; then
+			echo "[mod-sync] Removing Workshop item $id (no longer in the mod list)"
+			rm -rf "$iddir"
+		fi
+	done
+fi
+
+# --- 6. Normalise the AMP mod-store layout --------------------------------
 # AMP's Workshop store may drop items directly into the download location.
 # tModLoader expects <steamworkshopfolder>/content/<appid>/<id>/...
 shopt -s nullglob
@@ -136,7 +202,7 @@ for dir in "$WORKSHOPDIR"/[0-9]*; do
 	fi
 done
 
-# --- 6. enabled.json ------------------------------------------------------
+# --- 7. enabled.json ------------------------------------------------------
 if [[ "${AUTOENABLE,,}" == "true" || "$AUTOENABLE" == "1" ]]; then
 	declare -A SEEN=()
 	NAMES=()
@@ -171,7 +237,7 @@ if [[ "${AUTOENABLE,,}" == "true" || "$AUTOENABLE" == "1" ]]; then
 			done
 			echo "]"
 		} >"$MODSDIR/enabled.json"
-		echo "[mod-sync] enabled.json regenerated with ${#NAMES[@]} mod(s): ${NAMES[*]}"
+		echo "[mod-sync] enabled.json regenerated with ${#NAMES[@]} mod(s)"
 	else
 		echo "[]" >"$MODSDIR/enabled.json"
 		echo "[mod-sync] No mods found, enabled.json emptied"
