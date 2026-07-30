@@ -38,12 +38,33 @@ grep -q '^App\.CommandLineParameterDelimiter= $' tmodloader14.kvp \
 	&& echo "OK  - delimiter verified" \
 	|| { echo "FAIL - the delimiter line is still wrong, fix it by hand"; exit 1; }
 
-if command -v python3 >/dev/null 2>&1; then
+# Find a JSON validator. On Windows, "python3" is often a Microsoft Store alias
+# stub that exits non-zero without running anything, so each candidate is tested
+# on a trivial program before being trusted.
+JSON_CHECK=""
+for py in python3 python py; do
+	if command -v "$py" >/dev/null 2>&1 && "$py" -c "pass" >/dev/null 2>&1; then
+		JSON_CHECK="$py -c"
+		JSON_PROG='import json,sys; json.load(open(sys.argv[1]))'
+		break
+	fi
+done
+if [[ -z "$JSON_CHECK" ]] && command -v node >/dev/null 2>&1; then
+	JSON_CHECK="node -e"
+	JSON_PROG='JSON.parse(require("fs").readFileSync(process.argv[1]))'
+fi
+
+if [[ -n "$JSON_CHECK" ]]; then
 	for f in *.json; do
-		python3 -c "import json,sys; json.load(open('$f'))" \
-			&& echo "OK  - $f is valid JSON" \
-			|| { echo "FAIL - $f is not valid JSON"; exit 1; }
+		if $JSON_CHECK "$JSON_PROG" "$f" >/dev/null 2>&1; then
+			echo "OK  - $f is valid JSON"
+		else
+			echo "FAIL - $f is not valid JSON"
+			exit 1
+		fi
 	done
+else
+	echo "WARN- no Python or Node found, skipping JSON validation (not fatal)"
 fi
 
 bash -n tmodloader14modsync.sh && echo "OK  - tmodloader14modsync.sh syntax is valid"
