@@ -201,29 +201,30 @@
         "EnumValues": {}
     },
     {
-        "DisplayName": "World Path",
+        "DisplayName": "Save Directory",
         "Category": "Terraria:stadia_controller",
         "Subcategory": "Server:dns:3",
-        "Keywords": "folder,path,world,saves,savegame,worlds",
-        "Description": "The relative path to save worlds in",
-        "FieldName": "WorldPath",
+        "Keywords": "folder,path,save,savegame,root,tmlsavedirectory,modconfigs",
+        "Description": "Root save folder for tModLoader. It holds `Worlds/`, `Mods/`, `ModConfigs/` and the players' data - it is **not** the worlds folder itself. The stock template pointed this at the worlds folder, which scattered `ModConfigs/` and `favorites.json` inside `Worlds/` and could break mod configuration. Leave it as `ModLoader` unless you know why you are changing it.",
+        "FieldName": "SaveDirectory",
         "ParamFieldName": "tmlsavedirectory",
-        "placeholder": "ModLoader/Worlds",
+        "placeholder": "ModLoader",
         "InputType": "text",
         "IncludeInCommandLine": true,
-        "DefaultValue": "ModLoader/Worlds"
+        "DefaultValue": "ModLoader"
     },
     {
         "DisplayName": "World Path",
         "Category": "Terraria:stadia_controller",
         "Subcategory": "Server:dns:3",
-        "Keywords": "",
-        "Description": "",
+        "Keywords": "folder,path,world,saves,savegame,worlds",
+        "Description": "Folder the worlds are stored in, relative to the server files. Should normally sit inside the Save Directory above.",
         "FieldName": "WorldPath",
         "ParamFieldName": "worldpath",
+        "placeholder": "ModLoader/Worlds",
         "InputType": "text",
         "IncludeInCommandLine": false,
-        "Hidden": true
+        "DefaultValue": "ModLoader/Worlds"
     },
     {
         "DisplayName": "World Name",
