@@ -1,6 +1,6 @@
 [
     {
-        "ConfigFile": "tmodloader14serverconfig.txt",
+        "ConfigFile": "tmodloader14wsserverconfig.txt",
         "AutoMap": true,
         "ConfigType": "kvp",
         "ConfigFormat": "{0}={1}"
